@@ -1,16 +1,17 @@
 const fs = require('fs-extra');
 const path = require('path');
 const validate = require('schema-utils');
-const { RawSource } = require('webpack-sources');
-const { asString } = require('webpack').Template;
+const {RawSource} = require('webpack-sources');
+const {asString} = require('webpack').Template;
 
 const optionsSchema = require('./schema');
+const glob = require("glob");
 
 const PLUGIN_NAME = 'Liquid Schema Plugin';
 
 module.exports = class LiquidSchemaPlugin {
     constructor(options = {}) {
-        validate(optionsSchema, options, { name: PLUGIN_NAME });
+        validate(optionsSchema, options, {name: PLUGIN_NAME});
         this.options = options;
     }
 
@@ -35,7 +36,9 @@ module.exports = class LiquidSchemaPlugin {
     }
 
     async buildSchema(compilation) {
-        const files = await fs.readdir(this.options.from.liquid);
+
+        const files = this.getFileArr(this.options.from.liquid)//await fs.readdir(this.options.from.liquid);
+
         const compilationOutput = compilation.compiler.outputPath;
 
         compilation.contextDependencies.add(this.options.from.liquid);
@@ -46,7 +49,6 @@ module.exports = class LiquidSchemaPlugin {
         return Promise.all(
             files.map(async file => {
                 const fileLocation = path.resolve(
-                    this.options.from.liquid,
                     file
                 );
                 const fileStat = await fs.stat(fileLocation);
@@ -58,15 +60,14 @@ module.exports = class LiquidSchemaPlugin {
                     );
 
                     const outputKey = this.getOutputKey(
-                        fileLocation,
+                        path.basename(fileLocation),
                         compilationOutput
                     );
-
                     try {
                         // eslint-disable-next-line no-param-reassign
                         compilation.assets[
                             outputKey
-                        ] = await this.replaceSchemaTags(
+                            ] = await this.replaceSchemaTags(
                             fileLocation,
                             compilation
                         );
@@ -90,10 +91,10 @@ module.exports = class LiquidSchemaPlugin {
     }
 
     getOutputKey(liquidSourcePath, compilationOutput) {
-        const fileName = path.relative(
+        const fileName = liquidSourcePath/*path.relative(
             this.options.from.liquid,
             liquidSourcePath
-        );
+        );*/
         const relativeOutputPath = path.relative(
             compilationOutput,
             this.options.to
@@ -101,6 +102,12 @@ module.exports = class LiquidSchemaPlugin {
 
         return path.join(relativeOutputPath, fileName);
     }
+
+    getFileArr(_globpath) {
+        return glob.sync(_globpath).map(function (_path) {
+            return _path
+        });
+    };
 
     async replaceSchemaTags(fileLocation, compilation) {
         const fileName = path.basename(fileLocation, '.liquid');
@@ -123,10 +130,10 @@ module.exports = class LiquidSchemaPlugin {
             ''
         );
         importableFilePath = path.resolve(
-            this.options.from.schema,
+            path.dirname(fileLocation),
+            //this.options.from.schema,
             importableFilePath
         );
-
         compilation.fileDependencies.add(require.resolve(importableFilePath));
 
         let importedSchema;
